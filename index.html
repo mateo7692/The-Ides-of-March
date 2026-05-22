@@ -14,6 +14,7 @@
       background-color: #2c3e50; 
       font-family: 'Georgia', serif; 
       color: #ecf0f1;
+      user-select: none;
     }
 
     #game-container {
@@ -35,6 +36,7 @@
       font-size: 0.9em;
       margin-bottom: 25px;
       min-height: 40px;
+      line-height: 1.4;
     }
 
     #scene {
@@ -49,7 +51,7 @@
       transition: background 0.15s, color 0.15s;
     }
 
-    /* Yellow/Orange warning visual cue */
+    /* Yellow warning visual cue */
     .warning {
       background: #f39c12 !important; 
       color: white !important;
@@ -81,4 +83,241 @@
       padding: 15px;
       font-size: 16px;
       font-weight: bold;
-      background:
+      background: #27ae60;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      width: 100%;
+      touch-action: manipulation;
+    }
+
+    #action-btn:active {
+      background: #2ecc71; 
+    }
+  </style>
+</head>
+<body>
+
+  <div id="game-container">
+    <h1 id="game-title">The Ides of March</h1>
+    <p id="instructions">Loading game...</p>
+
+    <div id="scene">
+      <div id="character-front">Caesar</div>
+      <div id="character-back">Assassin</div>
+    </div>
+
+    <div id="progress-container">
+      <div id="progress-bar"></div>
+    </div>
+
+    <button id="action-btn">Action (Spacebar or Tap)</button>
+  </div>
+
+  <script>
+    // Game State Variables
+    let phase = 1; // 1: You are the Assassin, 2: You are Caesar
+    let isWarning = false; 
+    let isLooking = false;
+    let isCharging = false;
+    let attackProgress = 0;
+    let gameActive = false;
+    let lookTimeout;
+
+    // DOM Elements
+    const instructionsText = document.getElementById('instructions');
+    const charFront = document.getElementById('character-front');
+    const charBack = document.getElementById('character-back');
+    const progressBar = document.getElementById('progress-bar');
+    const actionBtn = document.getElementById('action-btn');
+    const scene = document.getElementById('scene');
+
+    // Reset loop and start/switch game roles
+    function initGame(startingPhase) {
+      phase = startingPhase;
+      isWarning = false;
+      isLooking = false;
+      isCharging = false;
+      attackProgress = 0;
+      gameActive = true;
+      progressBar.style.width = '0%';
+      scene.classList.remove('looking', 'warning');
+      clearTimeout(lookTimeout);
+
+      if (phase === 1) {
+        instructionsText.innerText = "PHASE 1: Hold the button to attack. Release IMMEDIATELY when Caesar looks suspicious (Yellow)!";
+        charFront.innerText = "Caesar";
+        charBack.innerText = "You (Assassin)";
+        scheduleCaesarLook(); 
+        requestAnimationFrame(assassinLoop);
+      } else {
+        instructionsText.innerText = "PHASE 2: You are Caesar! Tap the button to look over your shoulder and catch your advisor.";
+        charFront.innerText = "You (Caesar)";
+        charBack.innerText = "Royal Advisor";
+        requestAnimationFrame(caesarLoop); 
+      }
+    }
+
+    // =========================================
+    // PHASE 1: Player is the Assassin
+    // =========================================
+    function scheduleCaesarLook() {
+      if (!gameActive || phase !== 1) return;
+      
+      // Random window between 1.5 and 3.5 seconds before Caesar suspects something
+      const timeUntilLook = Math.random() * 2000 + 1500; 
+      
+      lookTimeout = setTimeout(() => {
+        if (!gameActive) return;
+        
+        // 1. Trigger warning (Yellow cue)
+        isWarning = true;
+        charFront.innerText = "Caesar (Turning... 👀)";
+        scene.classList.add('warning');
+
+        // 2. 700ms reaction window before turning fully around
+        lookTimeout = setTimeout(() => {
+          if (!gameActive) return;
+          
+          isWarning = false;
+          isLooking = true;
+          charFront.innerText = "Caesar (LOOKING! 😡)";
+          scene.classList.remove('warning');
+          scene.classList.add('looking');
+          checkPhase1Caught(); 
+
+          // 3. Look for 1.5 seconds, then turn back around
+          lookTimeout = setTimeout(() => {
+            if (!gameActive) return;
+            isLooking = false;
+            charFront.innerText = "Caesar";
+            scene.classList.remove('looking');
+            scheduleCaesarLook(); 
+          }, 1500);
+          
+        }, 700); 
+        
+      }, timeUntilLook);
+    }
+
+    function assassinLoop() {
+      if (!gameActive || phase !== 1) return;
+
+      if (isCharging) {
+        attackProgress += 0.6; 
+        checkPhase1Caught();
+        
+        if (attackProgress >= 100) {
+          gameActive = false;
+          alert("Success! You assassinated Caesar and took the throne for yourself.");
+          initGame(2); 
+          return;
+        }
+      } else if (attackProgress > 0) {
+        attackProgress -= 0.3; // Progress drops slowly if you back off
+      }
+
+      progressBar.style.width = attackProgress + '%';
+      requestAnimationFrame(assassinLoop);
+    }
+
+    function checkPhase1Caught() {
+      if (isLooking && isCharging && phase === 1) {
+        gameActive = false;
+        alert("Caught! Caesar saw your dagger. Off to the dungeon you go.");
+        initGame(1); 
+      }
+    }
+
+    // =========================================
+    // PHASE 2: Player is Caesar
+    // =========================================
+    function caesarLoop() {
+      if (!gameActive || phase !== 2) return;
+
+      if (!isLooking) {
+        // AI Advisor randomly begins sneaking up
+        if (!isCharging && Math.random() < 0.02) {
+          isCharging = true;
+          charBack.innerText = "Advisor (SCHEMING!)";
+        }
+        if (isCharging) {
+          attackProgress += 0.5;
+        }
+      } else {
+        // Player successfully caught them mid-attack
+        if (isCharging) {
+          gameActive = false;
+          alert("You caught your advisor trying to assassinate you! You win the game!");
+          initGame(1); 
+          return;
+        }
+        if (attackProgress > 0) {
+          attackProgress -= 1; 
+        }
+      }
+
+      // Lose Condition for Phase 2
+      if (attackProgress >= 100) {
+        gameActive = false;
+        alert("Too late! Your advisor assassinated you. The cycle continues...");
+        initGame(1);
+        return;
+      }
+
+      progressBar.style.width = attackProgress + '%';
+      requestAnimationFrame(caesarLoop);
+    }
+
+    // =========================================
+    // Universal Input Handlers
+    // =========================================
+    function startAction(e) {
+      if (e && e.type !== 'keydown') e.preventDefault();
+      if (!gameActive) return;
+      
+      if (phase === 1) {
+        isCharging = true;
+      } else if (phase === 2) {
+        isLooking = true;
+        charFront.innerText = "You (LOOKING BACK!)";
+        scene.classList.add('looking');
+      }
+    }
+
+    function endAction(e) {
+      if (e && e.type !== 'keyup') e.preventDefault();
+      if (!gameActive) return;
+      
+      if (phase === 1) {
+        isCharging = false;
+      } else if (phase === 2) {
+        isLooking = false;
+        charFront.innerText = "You (Caesar)";
+        scene.classList.remove('looking');
+        isCharging = false;
+        charBack.innerText = "Royal Advisor";
+      }
+    }
+
+    // Mouse and Mobile Touch Events
+    actionBtn.addEventListener('mousedown', startAction);
+    actionBtn.addEventListener('mouseup', endAction);
+    actionBtn.addEventListener('mouseleave', endAction);
+    actionBtn.addEventListener('touchstart', startAction, {passive: false});
+    actionBtn.addEventListener('touchend', endAction, {passive: false});
+
+    // Desktop Keyboard Spacebar Events
+    document.addEventListener('keydown', (e) => {
+      if (e.code === 'Space' && !e.repeat) startAction(e);
+    });
+    document.addEventListener('keyup', (e) => {
+      if (e.code === 'Space') endAction(e);
+    });
+
+    // Run game on load
+    initGame(1);
+  </script>
+</body>
+</html>
